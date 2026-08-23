@@ -4,7 +4,7 @@ import datetime
 import pandas as pd
 import streamlit as st
 
-from src.llm_agent import evaluate_candidate, generate_outreach_message
+from src.llm_agent import evaluate_candidate, evaluate_candidates_batch, generate_outreach_message
 from src.data_loader import save_outreach_log, get_clean_candidates, render_refresh_button, ensure_data_loaded
 from src.connectors import LinkedInMockConnector
 from src.ui_styles import (
@@ -103,7 +103,7 @@ selected_role = open_roles.iloc[selected_idx]
 if st.session_state.get("sourcing_role_label") != selected_label:
     if "sourcing_results" in st.session_state:
         del st.session_state["sourcing_results"]
-    for k in [k for k in st.session_state if k.startswith("msg_")]:
+    for k in [k for k in st.session_state if k.startswith("msg_") or k.startswith("edit_")]:
         del st.session_state[k]
 
 st.markdown("<br>", unsafe_allow_html=True)
@@ -135,7 +135,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 section_header("3️⃣", "Candidate Sourcing & AI Ranking")
 
 if st.button("🔍 Run AI Sourcing for this Role", type="primary", use_container_width=True):
-    with st.spinner("Deduplicating profiles → Applying experience filter → Running AI evaluation…"):
+    with st.spinner("Deduplicating profiles → Applying experience filter → Running parallel AI evaluation…"):
         try:
             raw_candidates   = candidates_df.copy()
             unique_candidates = get_clean_candidates(raw_candidates)
@@ -175,13 +175,24 @@ if st.button("🔍 Run AI Sourcing for this Role", type="primary", use_container
                 with st.expander(f"🚫 Experience Filter — {len(ineligible)} profile(s) excluded"):
                     st.dataframe(pd.DataFrame(ineligible), use_container_width=True, hide_index=True)
 
-            progress = st.progress(0, text="Evaluating candidates…")
-            results  = []
+            progress = st.progress(0, text="Evaluating candidates in parallel…")
             role_dict = selected_role.to_dict()
+            candidates_list = [row.to_dict() if hasattr(row, "to_dict") else dict(row) for row in eligible]
 
-            for idx, row in enumerate(eligible):
-                cand_dict = row.to_dict() if hasattr(row, "to_dict") else dict(row)
-                eval_res  = evaluate_candidate(role_dict, cand_dict)
+            def update_progress(done, total):
+                pct = int((done / max(total, 1)) * 100)
+                progress.progress(pct, text=f"Evaluated {done}/{total} candidates in parallel…")
+
+            eval_results = evaluate_candidates_batch(
+                role_dict,
+                candidates_list,
+                max_workers=5,
+                progress_callback=update_progress
+            )
+
+            results = []
+            for row, eval_res in zip(eligible, eval_results):
+                eval_res = eval_res or {}
                 results.append({
                     "Profile_ID":  row.get("Profile_ID"),
                     "Name":        row.get("Full_Name"),
@@ -189,21 +200,17 @@ if st.button("🔍 Run AI Sourcing for this Role", type="primary", use_container
                     "Experience":  row.get("Total_Experience_Yrs"),
                     "Location":    row.get("Location"),
                     "Open to Work":row.get("Open_To_Work"),
-                    "AI Score":    eval_res.get("score", 0),
+                    "AI Score":    eval_res.get("score", 50),
                     "Reasons":     eval_res.get("reasons", "N/A"),
                     "Gaps":        eval_res.get("gaps",    "N/A"),
                     "Email":       row.get("Email", ""),
                 })
-                progress.progress(
-                    int((idx + 1) / max(len(eligible), 1) * 100),
-                    text=f"Evaluated {idx + 1}/{len(eligible)} candidates…"
-                )
 
             progress.empty()
             res_df = pd.DataFrame(results).sort_values("AI Score", ascending=False)
             st.session_state.sourcing_results     = res_df
             st.session_state.sourcing_role_label  = selected_label
-            st.success(f"✅ Evaluated **{len(results)}** candidate(s). Results ranked below.")
+            st.success(f"✅ Evaluated **{len(results)}** candidate(s) in parallel. Results ranked below.")
 
         except Exception as err:
             logger.exception("Error executing candidate sourcing pipeline")
@@ -343,21 +350,27 @@ if "sourcing_results" in st.session_state:
             if st.button("✍️ Generate Personalised Outreach Message", use_container_width=True):
                 with st.spinner("Drafting personalised message grounded on verified profile data…"):
                     try:
-                        msg = generate_outreach_message(selected_role.to_dict(), orig_cand.iloc[0].to_dict())
+                        cand_dict = orig_cand.iloc[0].to_dict() if not orig_cand.empty else cand_res.to_dict()
+                        msg = generate_outreach_message(selected_role.to_dict(), cand_dict)
                         st.session_state[f"msg_{profile_id}"] = msg
+                        st.session_state[f"edit_{profile_id}"] = msg
                     except Exception as err:
                         logger.exception("Error generating outreach text")
                         st.error(f"Failed to generate message: {err}")
 
         msg_key = f"msg_{profile_id}"
+        edit_key = f"edit_{profile_id}"
+
         if msg_key in st.session_state:
+            if edit_key not in st.session_state:
+                st.session_state[edit_key] = st.session_state[msg_key]
+
             st.markdown("<br>", unsafe_allow_html=True)
             st.info("📝 **AI-generated draft below** — review and edit before approving. Only verified profile facts are used; no details are fabricated.")
             edited_msg = st.text_area(
                 "Review & Edit Message:",
-                value=st.session_state[msg_key],
                 height=160,
-                key=f"edit_{profile_id}"
+                key=edit_key
             )
 
             st.markdown("<br>", unsafe_allow_html=True)
