@@ -120,40 +120,41 @@ else:
 
             err_html = ""
             if s_status == "Failed":
-                err_html = f"""
-                <div style="margin-top:8px;padding:8px 12px;background:rgba(239,68,68,0.08);
-                     border:1px solid rgba(239,68,68,0.2);border-radius:6px;font-size:0.8rem;">
-                    <span style="color:#F87171;font-weight:600;">Error {row.get('Error_Code','?')}</span>
-                    &nbsp;—&nbsp;<span style="color:#94A3B8;">{row.get('Error_Detail','')}</span>
-                </div>"""
+                err_html = (
+                    f'<div style="margin-top:8px;padding:8px 12px;background:rgba(239,68,68,0.08);'
+                    f'border:1px solid rgba(239,68,68,0.2);border-radius:6px;font-size:0.8rem;">'
+                    f'<span style="color:#F87171;font-weight:600;">Error {row.get("Error_Code","?")}</span>'
+                    f'&nbsp;—&nbsp;<span style="color:#94A3B8;">{row.get("Error_Detail","")}</span>'
+                    f'</div>'
+                )
 
             msg_preview = str(row.get("Message_Text", ""))[:140] + ("…" if len(str(row.get("Message_Text", ""))) > 140 else "")
 
-            st.markdown(
-                f"""<div class="hr-card" style="margin-bottom:10px;">
-                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
-                        <span style="font-size:1.1rem;">{icon}</span>
-                        <span style="font-weight:700;color:#F1F5F9;font-size:0.95rem;">
-                            Outreach <code style="background:rgba(30,144,255,0.1);padding:1px 6px;border-radius:4px;font-size:0.82rem;">
-                            {row.get('Outreach_ID','—')}</code>
-                        </span>
-                        {b_html}
-                        <span style="color:#64748B;font-size:0.8rem;margin-left:auto;">
-                            {row.get('Created_At','')}
-                        </span>
-                    </div>
-                    <div style="font-size:0.83rem;color:#94A3B8;margin-bottom:6px;">
-                        Profile: <strong style="color:#CBD5E1;">{row.get('Profile_ID','—')}</strong>
-                        &nbsp;·&nbsp; Role: <strong style="color:#CBD5E1;">{row.get('Role_ID','—')}</strong>
-                        &nbsp;·&nbsp; Channel: {row.get('Channel','—')}
-                    </div>
-                    <div style="font-size:0.83rem;color:#64748B;font-style:italic;">
-                        "{msg_preview}"
-                    </div>
-                    {err_html}
-                </div>""",
-                unsafe_allow_html=True,
+            card_html = (
+                f'<div class="hr-card" style="margin-bottom:10px;">'
+                f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">'
+                f'<span style="font-size:1.1rem;">{icon}</span>'
+                f'<span style="font-weight:700;color:#F1F5F9;font-size:0.95rem;">'
+                f'Outreach <code style="background:rgba(30,144,255,0.1);padding:1px 6px;border-radius:4px;font-size:0.82rem;">'
+                f'{row.get("Outreach_ID","—")}</code>'
+                f'</span>'
+                f'{b_html}'
+                f'<span style="color:#64748B;font-size:0.8rem;margin-left:auto;">'
+                f'{row.get("Created_At","")}'
+                f'</span>'
+                f'</div>'
+                f'<div style="font-size:0.83rem;color:#94A3B8;margin-bottom:6px;">'
+                f'Profile: <strong style="color:#CBD5E1;">{row.get("Profile_ID","—")}</strong>'
+                f'&nbsp;·&nbsp; Role: <strong style="color:#CBD5E1;">{row.get("Role_ID","—")}</strong>'
+                f'&nbsp;·&nbsp; Channel: {row.get("Channel","—")}'
+                f'</div>'
+                f'<div style="font-size:0.83rem;color:#64748B;font-style:italic;">'
+                f'"{msg_preview}"'
+                f'</div>'
+                f'{err_html}'
+                f'</div>'
             )
+            st.markdown(card_html, unsafe_allow_html=True)
 
         st.caption(f"Showing {len(display_df)} of {total} total records.")
 
@@ -171,16 +172,16 @@ else:
                 "In production, a retry queue would automatically re-attempt after token refresh or cooldown."
             )
             for _, row in failed_records.iterrows():
-                st.markdown(
-                    f"""<div class="hr-exception">
-                        <span class="exc-tag">{row.get('Error_Code','ERR')}</span>
-                        <strong>Outreach {row.get('Outreach_ID','—')}</strong>
-                        &nbsp;(Profile: {row.get('Profile_ID','—')}, Role: {row.get('Role_ID','—')})
-                        &nbsp;—&nbsp; {row.get('Error_Detail','')}
-                        <br><span style="color:#64748B;font-size:0.78rem;">Logged at: {row.get('Created_At','')}</span>
-                    </div>""",
-                    unsafe_allow_html=True,
+                exc_html = (
+                    f'<div class="hr-exception">'
+                    f'<span class="exc-tag">{row.get("Error_Code","ERR")}</span>'
+                    f'<strong>Outreach {row.get("Outreach_ID","—")}</strong>'
+                    f'&nbsp;(Profile: {row.get("Profile_ID","—")}, Role: {row.get("Role_ID","—")})'
+                    f'&nbsp;—&nbsp; {row.get("Error_Detail","")}'
+                    f'<br><span style="color:#64748B;font-size:0.78rem;">Logged at: {row.get("Created_At","")}</span>'
+                    f'</div>'
                 )
+                st.markdown(exc_html, unsafe_allow_html=True)
 
     except Exception as err:
         logger.exception("Error rendering audit log")
