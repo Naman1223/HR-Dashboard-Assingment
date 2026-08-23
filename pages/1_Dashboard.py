@@ -1,7 +1,7 @@
 import logging
 import streamlit as st
 import pandas as pd
-from src.data_loader import render_refresh_button
+from src.data_loader import render_refresh_button, ensure_data_loaded
 from src.ui_styles import (
     inject_styles, page_hero, section_header,
     badge, exception_item, render_sidebar_toggle
@@ -31,12 +31,11 @@ with st.sidebar:
 
 render_refresh_button(sidebar=True)
 
-# ── Guard ─────────────────────────────────────────────────────────────────────
-if "data" not in st.session_state:
-    st.warning("⚠️ Data not loaded. Please navigate to the **Home** page first.")
+# ── Data Init ─────────────────────────────────────────────────────────────────
+data = ensure_data_loaded()
+if not data:
+    st.error("Unable to load system data. Please check Excel file.")
     st.stop()
-
-data        = st.session_state.data
 emp_df      = data.get("Employees",            pd.DataFrame())
 att_df      = data.get("Attendance_30D",        pd.DataFrame())
 roles_df    = data.get("Open_Roles",            pd.DataFrame())

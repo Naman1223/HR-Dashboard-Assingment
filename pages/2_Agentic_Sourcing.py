@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from src.llm_agent import evaluate_candidate, generate_outreach_message
-from src.data_loader import save_outreach_log, get_clean_candidates, render_refresh_button
+from src.data_loader import save_outreach_log, get_clean_candidates, render_refresh_button, ensure_data_loaded
 from src.connectors import LinkedInMockConnector
 from src.ui_styles import (
     inject_styles, page_hero, section_header, badge,
@@ -40,9 +40,10 @@ with st.sidebar:
                              help="Forces the connector to return a simulated authentication failure on next send.")
 render_refresh_button(sidebar=True)
 
-# ── Guard ─────────────────────────────────────────────────────────────────────
-if "data" not in st.session_state:
-    st.warning("⚠️ Please navigate to the **Home** page to initialise data.")
+# ── Data Init ─────────────────────────────────────────────────────────────────
+data = ensure_data_loaded()
+if not data:
+    st.error("Unable to load system data. Please check Excel file.")
     st.stop()
 
 roles_df      = st.session_state.data.get("Open_Roles",           pd.DataFrame())

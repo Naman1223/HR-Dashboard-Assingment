@@ -60,6 +60,25 @@ def load_data():
     return data
 
 
+def ensure_data_loaded():
+    """
+    Ensures dataset is loaded in st.session_state.
+    If missing, automatically loads data from the Excel workbook.
+    """
+    if "data" not in st.session_state or not st.session_state.get("data"):
+        dataset = load_data()
+        if dataset:
+            st.session_state.data = dataset
+            if "outreach_log" not in st.session_state or st.session_state.outreach_log.empty:
+                if "Outreach_Log" in dataset and not dataset["Outreach_Log"].empty:
+                    st.session_state.outreach_log = dataset["Outreach_Log"].copy()
+                else:
+                    st.session_state.outreach_log = pd.DataFrame()
+            logger.info("Dataset automatically loaded into session state.")
+        return dataset
+    return st.session_state.data
+
+
 def _validate_employees(emp_df):
     issues = []
     if emp_df.empty:

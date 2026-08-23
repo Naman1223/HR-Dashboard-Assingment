@@ -1,7 +1,7 @@
 import logging
 import streamlit as st
 import pandas as pd
-from src.data_loader import render_refresh_button
+from src.data_loader import render_refresh_button, ensure_data_loaded
 from src.ui_styles import inject_styles, page_hero, section_header, badge, render_sidebar_toggle
 
 logger = logging.getLogger("HRSystem.AuditLog")
@@ -28,9 +28,10 @@ with st.sidebar:
 
 render_refresh_button(sidebar=True)
 
-# ── Guard ─────────────────────────────────────────────────────────────────────
-if "data" not in st.session_state or "outreach_log" not in st.session_state:
-    st.warning("⚠️ No session data found. Navigate to the **Home** page first.")
+# ── Data Init ─────────────────────────────────────────────────────────────────
+data = ensure_data_loaded()
+if not data:
+    st.error("Unable to load system data. Please check Excel file.")
     st.stop()
 
 page_hero(
