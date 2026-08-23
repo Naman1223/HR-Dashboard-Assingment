@@ -170,6 +170,20 @@ def _get_candidate_fields_for_ai(candidate_dict):
     }
 
 
+def _clean_llm_response(text):
+    if not text:
+        return ""
+    # Strip <think>...</think> tags and everything inside them (reasoning traces)
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    # Strip any residual opening <think> tags if model truncated closing tag
+    if "<think>" in cleaned:
+        cleaned = cleaned.split("<think>")[0].strip()
+    # Strip quotes if wrapped
+    if (cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'")):
+        cleaned = cleaned[1:-1].strip()
+    return cleaned
+
+
 def evaluate_candidate(role_dict, candidate_dict):
     role_id = role_dict.get("Role_ID", "R_DEFAULT")
     cand_id = candidate_dict.get("Profile_ID", "C_DEFAULT")
@@ -210,12 +224,19 @@ Respond in JSON format:
 
     try:
         response = _call_groq_with_retry(prompt, response_format={"type": "json_object"})
-        if not response or not response.choices:
+        if not response or not response.choices or not response.choices[0].message.content:
             res = _heuristic_evaluate(role_dict, candidate_dict)
             _EVAL_CACHE[cache_key] = res
             return res
 
-        payload = json.loads(response.choices[0].message.content)
+        raw_content = _clean_llm_response(response.choices[0].message.content)
+        
+        # Extract JSON substring if surrounded by extra text
+        json_match = re.search(r"\{.*\}", raw_content, re.DOTALL)
+        if json_match:
+            raw_content = json_match.group(0)
+
+        payload = json.loads(raw_content)
         score = int(payload.get("score", 0))
         score = max(0, min(100, score))
 
@@ -288,7 +309,7 @@ def generate_outreach_message(role_dict, candidate_dict):
         return fallback_msg
 
     prompt = f"""
-Draft a personalized cold outreach message for LinkedIn.
+Draft a single personalized cold outreach message for LinkedIn for candidate {name}.
 
 ROLE:
 {json.dumps(role_info, indent=2)}
@@ -297,11 +318,11 @@ CANDIDATE:
 {json.dumps(cand_info, indent=2)}
 
 RULES:
-- Use verified facts only.
-- Address candidate by name ({name}).
+- Do NOT output any thinking, reasoning traces, or tags like <think>.
+- Output ONLY the final personalized outreach message text.
+- Use verified facts only. Address candidate by name ({name}).
 - Keep total length under 80 words.
 - Professional tone.
-- Output message body text only without quotes or Markdown headers.
 """
 
     try:
@@ -309,13 +330,11 @@ RULES:
         if not response or not response.choices or not response.choices[0].message.content:
             return fallback_msg
 
-        text = response.choices[0].message.content.strip()
-        # Clean quotes if model wrapped response in quotes
-        if text.startswith('"') and text.endswith('"'):
-            text = text[1:-1].strip()
+        text = _clean_llm_response(response.choices[0].message.content)
         return text if text else fallback_msg
 
     except Exception as err:
         logger.warning(f"Error generating outreach message with LLM: {err}")
         return fallback_msg
+
 
