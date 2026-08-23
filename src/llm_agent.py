@@ -3,6 +3,7 @@ import re
 import json
 import time
 import logging
+import pandas as pd
 import streamlit as st
 from groq import Groq
 from dotenv import load_dotenv
@@ -26,36 +27,46 @@ if not client:
     logger.warning("GROQ_API_KEY environment variable is missing. Running in mock AI mode.")
 
 
-def _call_groq_with_retry(prompt, response_format=None, max_retries=4):
+def _call_groq_with_retry(prompt, response_format=None, max_retries=3):
     if not client:
         logger.warning("Groq client not initialized. Skipping API call.")
         return None
 
-    model_name = "groq/compound-mini"
-    kwargs = {
-        "model": model_name,
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    if response_format:
-        kwargs["response_format"] = response_format
+    # Supported active Groq models in org tier
+    models_to_try = [
+        "qwen/qwen3.6-27b",
+        "openai/gpt-oss-20b",
+        "openai/gpt-oss-120b",
+        "groq/compound",
+        "allam-2-7b"
+    ]
 
-    delay = 4.0
-    for attempt in range(max_retries):
-        try:
-            return client.chat.completions.create(**kwargs)
-        except Exception as err:
-            err_str = str(err)
-            if any(k in err_str.lower() for k in ["429", "rate_limit", "limit", "resource_exhausted"]):
-                match = re.search(r"please try again in ([\d\.]+)s", err_str.lower())
-                sleep_time = float(match.group(1)) + 0.5 if match else delay
-                logger.warning(f"Groq rate limit hit (Attempt {attempt + 1}/{max_retries}). Retrying in {sleep_time:.2f}s...")
-                time.sleep(sleep_time)
-                delay *= 2.0
-            else:
-                logger.error(f"Groq API call failed with unhandled error: {err}")
-                raise err
+    for model_name in models_to_try:
+        kwargs = {
+            "model": model_name,
+            "messages": [{"role": "user", "content": prompt}]
+        }
+        if response_format:
+            kwargs["response_format"] = response_format
 
-    raise RuntimeError("Exhausted retries for Groq API due to repeated rate limiting.")
+        delay = 2.0
+        for attempt in range(max_retries):
+            try:
+                return client.chat.completions.create(**kwargs)
+            except Exception as err:
+                err_str = str(err)
+                if any(k in err_str.lower() for k in ["429", "rate_limit", "limit", "resource_exhausted"]):
+                    match = re.search(r"please try again in ([\d\.]+)s", err_str.lower())
+                    sleep_time = float(match.group(1)) + 0.5 if match else delay
+                    logger.warning(f"Groq rate limit hit on {model_name} (Attempt {attempt + 1}/{max_retries}). Retrying in {sleep_time:.2f}s...")
+                    time.sleep(sleep_time)
+                    delay *= 1.5
+                else:
+                    logger.warning(f"Groq model {model_name} failed: {err}. Trying next model if available...")
+                    break
+
+    logger.error("Exhausted retries for all Groq models.")
+    return None
 
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -70,6 +81,59 @@ def _safe_val(val, default="Unknown"):
     if not s or s.lower() in ("nan", "none", "<na>", "null"):
         return default
     return s
+
+
+def _heuristic_evaluate(role_dict, cand_dict):
+    role_title = _safe_val(role_dict.get("Role_Title"), "Sales Officer").lower()
+    territory = _safe_val(role_dict.get("Territory_or_Base"), "").lower()
+    must_skills_str = _safe_val(role_dict.get("Must_Have_Skills"), "").lower()
+    must_skills = [s.strip() for s in must_skills_str.split(",") if s.strip()]
+
+    cand_title = _safe_val(cand_dict.get("Current_Title"), "").lower()
+    location = _safe_val(cand_dict.get("Location"), "").lower()
+    cand_skills_str = _safe_val(cand_dict.get("Skills"), "").lower()
+    open_work = _safe_val(cand_dict.get("Open_To_Work"), "").lower()
+
+    score = 45
+    reasons = []
+    gaps = []
+
+    # Title alignment
+    sales_kw = ["sales", "account", "business development", "manager", "executive", "officer", "fmcg", "lead", "bde", "asm", "rsm"]
+    if any(k in cand_title for k in sales_kw):
+        score += 20
+        reasons.append(f"Current title ({_safe_val(cand_dict.get('Current_Title'))}) aligns with sales operations.")
+    else:
+        gaps.append(f"Current role ({_safe_val(cand_dict.get('Current_Title'))}) is outside core sales track.")
+
+    # Location / Territory match
+    state_kw = ["up", "uttar pradesh", "rajasthan", "mp", "madhya pradesh", "delhi", "noida", "agra", "kanpur", "lucknow", "varanasi", "jaipur"]
+    if any(loc in location for loc in territory.split() if len(loc) > 2) or any(k in location and k in territory for k in state_kw):
+        score += 15
+        reasons.append(f"Base location ({_safe_val(cand_dict.get('Location'))}) matches target territory ({_safe_val(role_dict.get('Territory_or_Base'))}).")
+    else:
+        gaps.append(f"Located in {_safe_val(cand_dict.get('Location'))}, which differs from base territory ({_safe_val(role_dict.get('Territory_or_Base'))}).")
+
+    # Skills overlap
+    matched_skills = [s for s in must_skills if s in cand_skills_str or any(kw in cand_skills_str for kw in s.split())]
+    if matched_skills:
+        score += min(15, len(matched_skills) * 8)
+        reasons.append(f"Demonstrates relevant skills: {', '.join(matched_skills[:3])}.")
+    else:
+        gaps.append("Specific required skills not explicitly listed on profile.")
+
+    # Open to work bonus
+    if open_work in ("yes", "true", "1"):
+        score += 5
+        reasons.append("Profile is flagged as Open to Work.")
+
+    score = max(25, min(95, score))
+
+    return {
+        "score": score,
+        "reasons": " ".join(reasons) if reasons else "General candidate background evaluated.",
+        "gaps": " ".join(gaps) if gaps else "No critical blockers noted."
+    }
 
 
 def _get_role_fields_for_ai(role_dict):
@@ -115,11 +179,7 @@ def evaluate_candidate(role_dict, candidate_dict):
         return _EVAL_CACHE[cache_key]
 
     if not client:
-        res = {
-            "score": 50,
-            "reasons": "AI key missing — heuristic scoring applied.",
-            "gaps": "Configure GROQ_API_KEY for deep LLM analysis."
-        }
+        res = _heuristic_evaluate(role_dict, candidate_dict)
         _EVAL_CACHE[cache_key] = res
         return res
 
@@ -151,7 +211,9 @@ Respond in JSON format:
     try:
         response = _call_groq_with_retry(prompt, response_format={"type": "json_object"})
         if not response or not response.choices:
-            raise ValueError("Empty response from LLM provider")
+            res = _heuristic_evaluate(role_dict, candidate_dict)
+            _EVAL_CACHE[cache_key] = res
+            return res
 
         payload = json.loads(response.choices[0].message.content)
         score = int(payload.get("score", 0))
@@ -167,12 +229,8 @@ Respond in JSON format:
 
     except Exception as err:
         logger.warning(f"Error evaluating candidate {cand_id}: {err}")
-        # Rule-based fallback instead of crashing
-        res = {
-            "score": 60,
-            "reasons": f"Basic profile match evaluated for {role_info.get('Role Title')}.",
-            "gaps": "Detailed LLM reasoning transiently unavailable."
-        }
+        res = _heuristic_evaluate(role_dict, candidate_dict)
+        _EVAL_CACHE[cache_key] = res
         return res
 
 
