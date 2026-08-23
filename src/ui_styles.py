@@ -560,15 +560,13 @@ def soft_criteria_card(preferred: str, outcomes: str):
 
 def render_sidebar_toggle():
     """
-    Two-button sidebar toggle — avoids any z-index conflict with nav links:
+    Minimal two-button sidebar toggle, session-only (no localStorage).
 
-      1. A "‹" collapse button injected INSIDE the sidebar near the top.
-         Lives in the sidebar DOM so it never floats over page navigation.
+    • "‹ Hide" button — injected INSIDE the sidebar DOM (no z-index clash
+      with Streamlit's page navigation links).
+    • "☰" FAB — fixed at bottom-left, only visible while sidebar is hidden.
 
-      2. A small "☰" FAB at the bottom-left corner of the screen.
-         Only VISIBLE when the sidebar is hidden, so it never overlaps anything.
-
-    Both operate entirely client-side. State persists via localStorage.
+    Sidebar is always visible on fresh page load / navigation.
     Call once per page, after inject_styles().
     """
     components.html(
@@ -577,22 +575,24 @@ def render_sidebar_toggle():
         (function () {
             var doc = window.parent.document;
 
-            /* Run once per page load (not once per Streamlit session,
-               because navigation replaces the DOM) */
-            if (doc.getElementById('hr-sidebar-show-fab')) {
-                _hrSyncFabVisibility();
-                return;
-            }
+            /* ── Clear any stale localStorage key from old versions ── */
+            localStorage.removeItem('hr-sidebar-hidden');
 
-            /* ── Persisted state ── */
-            var hidden = localStorage.getItem('hr-sidebar-hidden') === 'true';
+            /* ── Remove leftover elements from previous Streamlit renders ── */
+            ['hr-sidebar-show-fab', 'hr-sidebar-hide-btn'].forEach(function(id) {
+                var el = doc.getElementById(id);
+                if (el) el.remove();
+            });
 
-            /* ── FAB style helper ── */
+            /* session-only toggle state — always start visible */
+            var hidden = false;
+
+            /* ── Shared button styles ── */
             function styleBtn(el, extra) {
                 Object.assign(el.style, Object.assign({
-                    border:         '1px solid rgba(255,255,255,0.12)',
-                    background:     'rgba(10,22,40,0.82)',
-                    color:          'rgba(200,220,255,0.75)',
+                    border:         '1px solid rgba(255,255,255,0.13)',
+                    background:     'rgba(10,22,40,0.84)',
+                    color:          'rgba(200,220,255,0.78)',
                     cursor:         'pointer',
                     backdropFilter: 'blur(10px)',
                     transition:     'background 0.18s, color 0.18s, border-color 0.18s',
@@ -606,36 +606,37 @@ def render_sidebar_toggle():
                     el.style.color       = '#fff';
                 });
                 el.addEventListener('mouseleave', function () {
-                    el.style.background  = 'rgba(10,22,40,0.82)';
-                    el.style.borderColor = 'rgba(255,255,255,0.12)';
-                    el.style.color       = 'rgba(200,220,255,0.75)';
+                    el.style.background  = 'rgba(10,22,40,0.84)';
+                    el.style.borderColor = 'rgba(255,255,255,0.13)';
+                    el.style.color       = 'rgba(200,220,255,0.78)';
                 });
             }
 
-            /* ── Apply sidebar CSS ── */
-            function applySidebarState(hide) {
+            /* ── Sidebar visibility ── */
+            function setSidebar(hide) {
                 var sb = doc.querySelector('[data-testid="stSidebar"]');
                 if (!sb) return;
                 if (hide) {
-                    sb.style.setProperty('display',  'none', 'important');
-                    sb.style.setProperty('width',    '0',    'important');
-                    sb.style.setProperty('minWidth', '0',    'important');
+                    sb.style.setProperty('display',   'none', 'important');
+                    sb.style.setProperty('width',     '0',    'important');
+                    sb.style.setProperty('minWidth',  '0',    'important');
+                    showFab.style.display = 'flex';
                 } else {
                     sb.style.removeProperty('display');
                     sb.style.removeProperty('width');
                     sb.style.removeProperty('minWidth');
-                    /* nudge Streamlit's own expand control if needed */
+                    showFab.style.display = 'none';
+                    /* restore Streamlit's native expand if it got collapsed */
                     var exp = doc.querySelector('[data-testid="collapsedControl"]');
                     if (exp) setTimeout(function(){ exp.click(); }, 60);
                 }
             }
 
-            /* ── 1. "Show" FAB — bottom-left, only visible when hidden ──
-                   Positioned at bottom-left to avoid nav links entirely.   */
+            /* ── 1. "Show" FAB — bottom-left corner, hidden by default ── */
             var showFab = doc.createElement('button');
-            showFab.id    = 'hr-sidebar-show-fab';
-            showFab.title = 'Show sidebar';
-            showFab.innerHTML = '&#9776;'; /* ☰ */
+            showFab.id        = 'hr-sidebar-show-fab';
+            showFab.title     = 'Show sidebar';
+            showFab.innerHTML = '&#9776;';
             styleBtn(showFab, {
                 position:       'fixed',
                 bottom:         '18px',
@@ -645,28 +646,25 @@ def render_sidebar_toggle():
                 height:         '30px',
                 borderRadius:   '7px',
                 fontSize:       '15px',
-                display:        hidden ? 'flex' : 'none',
+                display:        'none',          /* hidden until sidebar is hidden */
                 alignItems:     'center',
                 justifyContent: 'center',
             });
             showFab.addEventListener('click', function () {
                 hidden = false;
-                localStorage.setItem('hr-sidebar-hidden', 'false');
-                showFab.style.display = 'none';
-                applySidebarState(false);
+                setSidebar(false);
             });
             doc.body.appendChild(showFab);
 
-            /* ── 2. "Hide" button — injected inside sidebar, near the top ──
-                   Part of the sidebar flow so it CANNOT cover nav links.    */
-            function injectHideButton() {
+            /* ── 2. "Hide" button — inside the sidebar, top-right corner ── */
+            function injectHideBtn() {
                 var sb = doc.querySelector('[data-testid="stSidebar"]');
                 if (!sb || doc.getElementById('hr-sidebar-hide-btn')) return;
 
                 var hideBtn = doc.createElement('button');
                 hideBtn.id        = 'hr-sidebar-hide-btn';
                 hideBtn.title     = 'Hide sidebar';
-                hideBtn.innerHTML = '&#8249; Hide'; /* ‹ Hide */
+                hideBtn.innerHTML = '&#8249; Hide';
                 styleBtn(hideBtn, {
                     position:       'absolute',
                     top:            '8px',
@@ -680,33 +678,18 @@ def render_sidebar_toggle():
                     letterSpacing:  '0.03em',
                     display:        'flex',
                     alignItems:     'center',
-                    gap:            '2px',
+                    gap:            '3px',
                 });
                 hideBtn.addEventListener('click', function () {
                     hidden = true;
-                    localStorage.setItem('hr-sidebar-hidden', 'true');
-                    showFab.style.display = 'flex';
-                    applySidebarState(true);
+                    setSidebar(true);
                 });
 
-                /* sidebar needs position:relative for absolute child */
-                if (getComputedStyle(sb).position === 'static') {
-                    sb.style.position = 'relative';
-                }
+                sb.style.position = 'relative'; /* needed for absolute child */
                 sb.appendChild(hideBtn);
             }
 
-            /* ── Sync FAB visibility on page transitions ── */
-            window._hrSyncFabVisibility = function() {
-                showFab.style.display = hidden ? 'flex' : 'none';
-            };
-
-            /* ── Boot ── */
-            setTimeout(injectHideButton, 180);
-            if (hidden) {
-                setTimeout(function(){ applySidebarState(true); }, 130);
-            }
-
+            setTimeout(injectHideBtn, 200);
         })();
         </script>
         """,
