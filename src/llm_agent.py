@@ -3,6 +3,7 @@ import re
 import json
 import time
 import logging
+import streamlit as st
 from groq import Groq
 from dotenv import load_dotenv
 
@@ -10,7 +11,15 @@ logger = logging.getLogger("HRSystem.LLMAgent")
 
 load_dotenv()
 
+# Read from environment variable or Streamlit Cloud secrets
 api_key = os.getenv("GROQ_API_KEY")
+if not api_key:
+    try:
+        if hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
+            api_key = st.secrets["GROQ_API_KEY"]
+    except Exception:
+        pass
+
 client = Groq(api_key=api_key) if api_key else None
 
 if not client:
