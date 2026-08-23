@@ -560,105 +560,103 @@ def soft_criteria_card(preferred: str, outcomes: str):
 
 def render_sidebar_toggle():
     """
-    Renders a floating button (top-left) that hides/shows the Streamlit sidebar.
-    Call this once per page, after inject_styles().
-    Uses CSS injected into the parent document to collapse the sidebar panel,
-    controlled by a session-state boolean `sidebar_hidden`.
+    Injects a minimal floating hamburger button into the parent document.
+    Operates entirely client-side via JavaScript — no st.rerun() needed.
+    State (hidden/shown) is persisted in localStorage so it survives reruns.
+    Call once per page, after inject_styles().
     """
-    if "sidebar_hidden" not in st.session_state:
-        st.session_state.sidebar_hidden = False
+    components.html(
+        """
+        <script>
+        (function () {
+            var doc = window.parent.document;
 
-    # Inject the hide/show CSS rule every render (state may have changed)
-    _inject_sidebar_visibility(st.session_state.sidebar_hidden)
+            /* ── Only inject once per Streamlit session ── */
+            if (doc.getElementById('hr-sidebar-fab')) { return; }
 
-    # Floating toggle button
-    icon = "▶" if st.session_state.sidebar_hidden else "◀"
-    label = "Show Sidebar" if st.session_state.sidebar_hidden else "Hide Sidebar"
+            /* ── Read persisted state ── */
+            var hidden = localStorage.getItem('hr-sidebar-hidden') === 'true';
 
-    st.markdown(
-        f"""
-        <style>
-        .sidebar-fab-wrapper {{
-            position: fixed;
-            top: 14px;
-            left: 14px;
-            z-index: 99999;
-        }}
-        </style>
+            /* ── Helper: apply sidebar visibility ── */
+            function applySidebarState(hide) {
+                var sb = doc.querySelector('[data-testid="stSidebar"]');
+                if (!sb) return;
+
+                if (hide) {
+                    sb.style.setProperty('display',   'none', 'important');
+                    sb.style.setProperty('width',      '0',    'important');
+                    sb.style.setProperty('min-width',  '0',    'important');
+                } else {
+                    sb.style.removeProperty('display');
+                    sb.style.removeProperty('width');
+                    sb.style.removeProperty('min-width');
+                    /* click Streamlit's own expand control if sidebar was
+                       also collapsed natively */
+                    var expandBtn = doc.querySelector('[data-testid="collapsedControl"]');
+                    if (expandBtn) { setTimeout(function(){ expandBtn.click(); }, 60); }
+                }
+            }
+
+            /* ── Create the button ── */
+            var btn = doc.createElement('button');
+            btn.id = 'hr-sidebar-fab';
+            btn.title = hidden ? 'Show sidebar' : 'Hide sidebar';
+            btn.innerHTML = '&#9776;'; /* ☰ hamburger */
+
+            Object.assign(btn.style, {
+                position:       'fixed',
+                top:            '10px',
+                left:           '10px',
+                zIndex:         '999999',
+                width:          '28px',
+                height:         '28px',
+                borderRadius:   '6px',
+                border:         '1px solid rgba(255,255,255,0.12)',
+                background:     'rgba(10,22,40,0.80)',
+                color:          'rgba(200,220,255,0.70)',
+                fontSize:       '14px',
+                lineHeight:     '1',
+                cursor:         'pointer',
+                display:        'flex',
+                alignItems:     'center',
+                justifyContent: 'center',
+                padding:        '0',
+                backdropFilter: 'blur(10px)',
+                transition:     'background 0.18s, color 0.18s, border-color 0.18s',
+                boxShadow:      '0 2px 6px rgba(0,0,0,0.35)',
+            });
+
+            /* ── Hover effects ── */
+            btn.addEventListener('mouseenter', function () {
+                btn.style.background   = 'rgba(30,144,255,0.25)';
+                btn.style.borderColor  = 'rgba(30,144,255,0.50)';
+                btn.style.color        = '#fff';
+            });
+            btn.addEventListener('mouseleave', function () {
+                btn.style.background   = 'rgba(10,22,40,0.80)';
+                btn.style.borderColor  = 'rgba(255,255,255,0.12)';
+                btn.style.color        = 'rgba(200,220,255,0.70)';
+            });
+
+            /* ── Click handler ── */
+            btn.addEventListener('click', function () {
+                hidden = !hidden;
+                localStorage.setItem('hr-sidebar-hidden', hidden);
+                btn.title = hidden ? 'Show sidebar' : 'Hide sidebar';
+                applySidebarState(hidden);
+            });
+
+            /* ── Mount ── */
+            doc.body.appendChild(btn);
+
+            /* ── Apply stored state immediately after Streamlit renders ── */
+            if (hidden) {
+                /* Streamlit may not have rendered the sidebar yet — wait briefly */
+                setTimeout(function(){ applySidebarState(true); }, 120);
+            }
+        })();
+        </script>
         """,
-        unsafe_allow_html=True,
+        height=0,
     )
 
-    # Streamlit button rendered normally — we rely on Streamlit's own rerun cycle
-    col_fab, _ = st.columns([0.08, 0.92])
-    with col_fab:
-        if st.button(icon, key="__sidebar_toggle_btn__", help=label, use_container_width=True):
-            st.session_state.sidebar_hidden = not st.session_state.sidebar_hidden
-            st.rerun()
-
-
-def _inject_sidebar_visibility(hidden: bool):
-    """
-    Inject or remove CSS that collapses the sidebar.
-    - hidden=True  → inject CSS to hide the sidebar completely.
-    - hidden=False → REMOVE the override style tag so Streamlit's
-                     own default CSS takes back control. Also clicks
-                     Streamlit's native expand button if the sidebar
-                     is in its built-in collapsed state.
-    """
-    if hidden:
-        b64_css = base64.b64encode(
-            b"""
-            section[data-testid="stSidebar"] {
-                display: none !important;
-                width: 0 !important;
-                min-width: 0 !important;
-            }
-            .stMainBlockContainer, .block-container {
-                max-width: 100% !important;
-                padding-left: 1rem !important;
-            }
-            """
-        ).decode("utf-8")
-        script = f"""<script>
-            (function() {{
-                var existing = window.parent.document.getElementById('sidebar-toggle-styles');
-                if (existing) {{ existing.remove(); }}
-                var style = window.parent.document.createElement('style');
-                style.id = 'sidebar-toggle-styles';
-                style.textContent = atob("{b64_css}");
-                window.parent.document.head.appendChild(style);
-            }})();
-        </script>"""
-    else:
-        # Remove the hiding override — Streamlit's own CSS restores the sidebar.
-        # Also programmatically click the native expand button if sidebar is
-        # still in Streamlit's "collapsed" state.
-        script = """<script>
-            (function() {
-                // 1. Remove our custom hide-style so Streamlit CSS takes over
-                var existing = window.parent.document.getElementById('sidebar-toggle-styles');
-                if (existing) { existing.remove(); }
-
-                // 2. If Streamlit's own sidebar is collapsed, click its toggle
-                //    button to expand it (handles edge case where Streamlit's
-                //    own state got out of sync).
-                function tryExpand() {
-                    var doc = window.parent.document;
-                    // Streamlit's collapse button sits outside the sidebar
-                    var btn = doc.querySelector('[data-testid="collapsedControl"]');
-                    if (btn) { btn.click(); return; }
-                    // Fallback: force sidebar display via inline style
-                    var sb = doc.querySelector('[data-testid="stSidebar"]');
-                    if (sb) {
-                        sb.style.removeProperty('display');
-                        sb.style.removeProperty('width');
-                        sb.style.removeProperty('min-width');
-                    }
-                }
-                // Small delay lets Streamlit finish its own render before we touch the DOM
-                setTimeout(tryExpand, 80);
-            })();
-        </script>"""
-
-    components.html(script, height=0)
