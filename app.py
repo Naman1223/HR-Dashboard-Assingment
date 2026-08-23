@@ -32,25 +32,34 @@ section_header("🧭", "System Modules")
 c1, c2, c3 = st.columns(3)
 
 with c1:
-    st.markdown("""<div class="hr-module-card">
-        <div class="mod-icon">📊</div>
-        <div class="mod-title">HR Dashboard</div>
-        <div class="mod-desc">Live workforce metrics, attendance analysis, recruitment pipeline, CTC summary, and data quality exception engine.</div>
-    </div>""", unsafe_allow_html=True)
+    st.markdown("""<a href="./Dashboard" target="_self" style="text-decoration: none; color: inherit; display: block; height: 100%;">
+        <div class="hr-module-card">
+            <div class="mod-icon">📊</div>
+            <div class="mod-title">HR Dashboard</div>
+            <div class="mod-desc">Live workforce metrics, attendance analysis, recruitment pipeline, CTC summary, and data quality exception engine.</div>
+        </div>
+    </a>""", unsafe_allow_html=True)
+    st.page_link("pages/1_Dashboard.py", label="Open HR Dashboard", icon="📊", use_container_width=True)
 
 with c2:
-    st.markdown("""<div class="hr-module-card">
-        <div class="mod-icon">🤖</div>
-        <div class="mod-title">Agentic Sourcing</div>
-        <div class="mod-desc">AI-powered candidate matching, ranked shortlisting, personalised outreach generation, and human-in-the-loop approval flow.</div>
-    </div>""", unsafe_allow_html=True)
+    st.markdown("""<a href="./Agentic_Sourcing" target="_self" style="text-decoration: none; color: inherit; display: block; height: 100%;">
+        <div class="hr-module-card">
+            <div class="mod-icon">🤖</div>
+            <div class="mod-title">Agentic Sourcing</div>
+            <div class="mod-desc">AI-powered candidate matching, ranked shortlisting, personalised outreach generation, and human-in-the-loop approval flow.</div>
+        </div>
+    </a>""", unsafe_allow_html=True)
+    st.page_link("pages/2_Agentic_Sourcing.py", label="Open Agentic Sourcing", icon="🤖", use_container_width=True)
 
 with c3:
-    st.markdown("""<div class="hr-module-card">
-        <div class="mod-icon">📋</div>
-        <div class="mod-title">Audit Log</div>
-        <div class="mod-desc">Complete outreach activity trail with send status, failure diagnostics, duplicate prevention evidence, and retry records.</div>
-    </div>""", unsafe_allow_html=True)
+    st.markdown("""<a href="./Audit_Log" target="_self" style="text-decoration: none; color: inherit; display: block; height: 100%;">
+        <div class="hr-module-card">
+            <div class="mod-icon">📋</div>
+            <div class="mod-title">Audit Log</div>
+            <div class="mod-desc">Complete outreach activity trail with send status, failure diagnostics, duplicate prevention evidence, and retry records.</div>
+        </div>
+    </a>""", unsafe_allow_html=True)
+    st.page_link("pages/3_Audit_Log.py", label="Open Audit Log", icon="📋", use_container_width=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -113,7 +122,10 @@ with st.sidebar:
     st.markdown("### 🏢 Jhandewalas Foods HR")
     st.caption("AI-Enabled HR Management System")
     st.markdown("---")
-    st.markdown("**📌 Navigation**")
-    st.markdown("Use the pages listed above to navigate.")
+    st.markdown("**📌 Quick Navigation**")
+    st.page_link("app.py", label="Home Page", icon="🏢", use_container_width=True)
+    st.page_link("pages/1_Dashboard.py", label="HR Dashboard", icon="📊", use_container_width=True)
+    st.page_link("pages/2_Agentic_Sourcing.py", label="Agentic Sourcing", icon="🤖", use_container_width=True)
+    st.page_link("pages/3_Audit_Log.py", label="Audit Log", icon="📋", use_container_width=True)
 
 render_refresh_button(sidebar=True)

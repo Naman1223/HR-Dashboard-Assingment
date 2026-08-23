@@ -29,6 +29,12 @@ with st.sidebar:
     st.markdown("### 🤖 Agentic Sourcing")
     st.caption("AI-powered candidate matching & outreach")
     st.markdown("---")
+    st.markdown("**📌 Quick Navigation**")
+    st.page_link("app.py", label="Home Page", icon="🏢", use_container_width=True)
+    st.page_link("pages/1_Dashboard.py", label="HR Dashboard", icon="📊", use_container_width=True)
+    st.page_link("pages/2_Agentic_Sourcing.py", label="Agentic Sourcing", icon="🤖", use_container_width=True)
+    st.page_link("pages/3_Audit_Log.py", label="Audit Log", icon="📋", use_container_width=True)
+    st.markdown("---")
     st.markdown("**⚙️ Demo Controls**")
     force_fail = st.checkbox("🔴 Simulate AUTH_401 Failure",
                              help="Forces the connector to return a simulated authentication failure on next send.")

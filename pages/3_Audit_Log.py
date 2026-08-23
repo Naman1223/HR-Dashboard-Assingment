@@ -19,6 +19,13 @@ render_sidebar_toggle()
 with st.sidebar:
     st.markdown("### 📋 Audit Log")
     st.caption("Outreach activity trail & failure diagnostics")
+    st.markdown("---")
+    st.markdown("**📌 Quick Navigation**")
+    st.page_link("app.py", label="Home Page", icon="🏢", use_container_width=True)
+    st.page_link("pages/1_Dashboard.py", label="HR Dashboard", icon="📊", use_container_width=True)
+    st.page_link("pages/2_Agentic_Sourcing.py", label="Agentic Sourcing", icon="🤖", use_container_width=True)
+    st.page_link("pages/3_Audit_Log.py", label="Audit Log", icon="📋", use_container_width=True)
+
 render_refresh_button(sidebar=True)
 
 # ── Guard ─────────────────────────────────────────────────────────────────────
