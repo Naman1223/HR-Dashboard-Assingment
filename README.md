@@ -1,110 +1,233 @@
-# 🏢 AI-Enabled HR Management & Agentic Recruitment System
+# AI-Enabled HR Management System — Jhandewalas Foods Limited
 
-An end-to-end AI-powered Human Resources and Talent Acquisition portal built for **Jhandewalas Foods Limited**. This system combines deterministic rule-based workforce analytics with LLM-powered candidate matching and personalized outreach automation.
-
----
-
-## 📁 Project Structure
-
-```text
-jaipur assingment/
-├── .env                                  # Environment variables (GROQ_API_KEY) [Ignored by Git]
-├── .gitignore                            # Git ignore patterns (.env, __pycache__, .pyc)
-├── README.md                             # Project overview and setup instructions
-├── requirements.txt                      # Python dependencies
-├── app.py                                # Streamlit application entry point & navigation
-├── Naman_AI_Engineer_Test_Sample_Data.xlsx # HR master dataset (Employees, Roles, Profiles, Logs)
-│
-├── pages/                                # Multi-page Streamlit views
-│   ├── 1_Dashboard.py                   # Workforce analytics, attendance, CTC & data audit
-│   ├── 2_Agentic_Sourcing.py            # AI candidate sourcing, ranking & outreach generator
-│   └── 3_Audit_Log.py                   # Historic and session outreach audit tracking
-│
-└── src/                                  # Core business logic & backend modules
-    ├── __init__.py                       # Package initializer
-    ├── connectors.py                     # Extensible outreach connector abstraction & mock adapter
-    ├── data_loader.py                    # Excel loading, data validation, deduplication & live sync
-    └── llm_agent.py                      # Groq LLM integration, candidate evaluation & outreach drafting
-```
+> **Assignment Submission** | Candidate: Naman | Role: AI Engineer
 
 ---
 
-## ✨ Key Features & Capabilities
-
-### 1. 📊 HR & Workforce Analytics Dashboard (`pages/1_Dashboard.py`)
-- **Workforce Overview**: Real-time headcount split by Active, On Notice, Resigned, and Open Vacancies.
-- **Compensation Analysis**: Total and average Monthly CTC breakdown by department with missing CTC reporting.
-- **Attendance Anomalies (30D)**: Absenteeism rates, late arrival tracking (>15% threshold flagged), and zero-attendance employee detection.
-- **Recruitment Pipeline Health**: Active pipeline candidates, stage breakdowns, and stalled application tracking (>14 days).
-- **Data Quality & Exception Audit**: Automated checks for missing departments, corrupt/future dates, invalid email syntax, and orphaned records.
-
-### 2. 🤖 Agentic Recruitment & Sourcing (`pages/2_Agentic_Sourcing.py`)
-- **Role Selection & Requirement Breakdown**: Displays hard criteria (must-have skills, experience range, location) vs. soft/AI criteria (preferred experience, core outcomes).
-- **Rule-Based Experience Filtering**: Filters out profiles outside acceptable role experience boundaries before invoking AI evaluation.
-- **LLM Candidate Fit Evaluation**: Scores candidates on a 0–100 scale using Groq LLM (`groq/compound-mini`) with concise reasons and identified skill gaps.
-- **AI-Powered Outreach Drafting**: Generates context-aware, personalized recruitment messages tailored to each candidate's profile.
-- **Cross-Role Duplicate Contact Prevention**: 
-  - Blocks duplicate outreach for the *same* role.
-  - Warns recruiters if a candidate was previously contacted for a *different* role.
-- **Connector Abstraction (`src/connectors.py`)**: Extensible interface decoupling UI actions from delivery channels (LinkedIn, Email, etc.), with mock `AUTH_401` error simulation.
-
-### 3. 📋 Outreach Audit Logging (`pages/3_Audit_Log.py`)
-- **Live Activity Tracking**: Real-time tracking of message statuses (`Sent`, `Failed`, `Pending`).
-- **Failure Diagnostics**: Detailed drill-down for failed dispatches with error codes and descriptions.
-
-### 4. 🔄 Live Excel Synchronization
-- **One-Click Refresh**: Sidebar button on all pages to re-read the Excel file from disk, invalidate cache, and re-evaluate pipelines without restarting Streamlit.
+## Table of Contents
+1. [Overview](#overview)
+2. [Live Demo Flow](#live-demo-flow)
+3. [Setup & Run Instructions](#setup--run-instructions)
+4. [Architecture](#architecture)
+5. [Assumptions Made](#assumptions-made)
+6. [Known Limitations](#known-limitations)
+7. [Test Evidence & Error Cases](#test-evidence--error-cases)
+8. [Time Spent](#time-spent)
 
 ---
 
-## 🛠️ Tech Stack & Prerequisites
+## Overview
 
-- **Frontend / UI**: [Streamlit](https://streamlit.io/)
-- **Data Processing**: [Pandas](https://pandas.pydata.org/), [OpenPyXL](https://openpyxl.readthedocs.io/)
-- **LLM Engine**: [Groq Cloud API](https://groq.com/) (`groq/compound-mini`)
-- **Environment Management**: `python-dotenv`
+A Streamlit-based HR Management System that combines **rule-based analytics** with **LLM-powered agentic sourcing** to help Jhandewalas Foods manage their workforce and automate candidate outreach.
+
+### Modules
+
+| Module | Description |
+|---|---|
+| **HR Dashboard** | Live workforce KPIs, attendance heatmaps, recruitment pipeline, data-quality exceptions |
+| **Agentic Sourcing** | AI-ranked candidate shortlisting, personalised outreach, human-in-the-loop approval |
+| **Audit Log** | Complete outreach trail with send status, failure diagnostics, duplicate prevention |
 
 ---
 
-## 🚀 Getting Started
+## Live Demo Flow
 
-### 1. Clone the Repository
+Follow these steps during the live demonstration:
+
+1. **Start the application** — run `streamlit run app.py` and open `http://localhost:8501`
+2. **Navigate to Agentic Sourcing** and select **"Sales Officer - Uttar Pradesh"** from the role dropdown
+3. **Review role criteria** — the system shows hard (must-have skills, experience, territory) and soft (AI-preferred traits) requirements parsed from the `Open_Roles` sheet
+4. **Run AI Sourcing** — click "Run AI Sourcing for this Role"; Groq LLM evaluates each profile against role criteria and returns a ranked shortlist with scores (0–100)
+5. **Explain score differences** — open at least two candidate cards and show why their scores differ (experience mismatch, territory fit, skills gap)
+6. **Generate personalised message** — click "Generate Message" for the top candidate
+7. **Edit & approve** — edit the draft, then click "Approve & Send"
+8. **Show the Audit Log** — verify the outreach record appears with `Sent` status
+9. **Duplicate prevention** — re-run sourcing; observe the deduplication banner showing how many profiles were removed before scoring
+10. **Force a failure** — enable **"Simulate AUTH_401 Failure"** in the sidebar, approve a send, then check the Audit Log for the `Failed` badge and error diagnostics
+11. **Change role** — switch to **"Area Sales Manager - Rajasthan"**; stale results clear automatically
+12. **Open HR Dashboard** — review KPI cards (headcount, attendance rate, open roles, CTC), absentee alerts, and data-quality exceptions
+13. **Architecture walk-through** — explain the component diagram and what would change before production deployment
+
+---
+
+## Setup & Run Instructions
+
+### Prerequisites
+
+- Python 3.10+
+- A **Groq API key** (free tier works): https://console.groq.com
+
+### Installation
+
 ```bash
+# 1. Clone the repository
 git clone https://github.com/Naman1223/HR-Dashboard-Assingment.git
-cd "jaipur assingment"
-```
+cd HR-Dashboard-Assingment
 
-### 2. Set Up Virtual Environment & Dependencies
-```bash
-# Create virtual environment
-python -m venv .venv
-
-# Activate virtual environment
-# Windows (PowerShell):
-.venv\Scripts\Activate.ps1
-# macOS / Linux:
-source .venv/bin/activate
-
-# Install required packages
+# 2. Install dependencies
 pip install -r requirements.txt
-```
 
-### 3. Configure Environment Variables
-Create a `.env` file in the root directory:
-```ini
-GROQ_API_KEY=gsk_your_groq_api_key_here
-```
-*(Note: If no API key is provided, the system gracefully degrades to mock AI mode).*
+# 3. Set your Groq API key
+# Windows (PowerShell)
+$env:GROQ_API_KEY = "gsk_your_key_here"
 
-### 4. Run the Streamlit Application
-```bash
+# Linux / macOS
+export GROQ_API_KEY="gsk_your_key_here"
+
+# 4. Place the data file in the project root
+# Ensure "Naman_AI_Engineer_Test_Sample_Data.xlsx" is present
+
+# 5. Run
 streamlit run app.py
 ```
-Open your browser at `http://localhost:8501`.
+
+Opens at `http://localhost:8501`.
+
+### requirements.txt
+
+```
+streamlit
+pandas
+openpyxl
+groq
+```
 
 ---
 
-## 🏛️ Architecture & Extensibility
+## Architecture
 
-- **Connector Abstraction**: Concrete connectors implement the `OutreachConnector` abstract base class in `src/connectors.py`. To plug in real LinkedIn or Email APIs, create a new class implementing `.send_message(profile_id, role_id, message_text)` without touching UI code.
-- **Robust Error Handling & Rate Limiting**: Exponential backoff retry loop in `src/llm_agent.py` catches API rate limits (`429` / `resource_exhausted`) and retries seamlessly.
+```
++-------------------------------------------------------------+
+|                    Streamlit Frontend                       |
+|  +----------+  +------------------+  +------------------+  |
+|  | app.py   |  | 1_Dashboard.py   |  | 2_Agentic_       |  |
+|  | (Landing)|  | (HR Analytics)   |  |   Sourcing.py    |  |
+|  +----------+  +------------------+  +------------------+  |
+|                                       +------------------+  |
+|   src/ui_styles.py  (shared CSS)      | 3_Audit_Log.py   |  |
+|   injected via components.html+atob() +------------------+  |
++----------------------+--------------------------------------+
+                       | Python function calls
+          +------------v-----------+
+          |    src/  Business Logic |
+          |  +--------------------+ |
+          |  | data_loader.py     | |  <- Excel -> DataFrame
+          |  | load_data()        | |     validation + exceptions
+          |  | validate_*()       | |
+          |  +--------------------+ |
+          |  +--------------------+ |
+          |  | llm_agent.py       | |  <- Groq LLM (llama-3.3-70b)
+          |  | evaluate_cand()    | |     structured JSON scoring
+          |  | gen_outreach()     | |     personalised message gen
+          |  +--------------------+ |
+          |  +--------------------+ |
+          |  | connectors.py      | |  <- LinkedIn mock connector
+          |  | LinkedInMockConn.  | |     simulates send + auth errors
+          |  +--------------------+ |
+          +------------+-----------+
+                       |
+          +------------v-----------+
+          | Excel Workbook (Data)  |
+          | Open_Roles             |
+          | LinkedIn_Profile_Pool  |
+          | Employees              |
+          | Attendance_30D         |
+          | Recruitment_Pipeline   |
+          | HR_Movements           |
+          | Performance_Snapshot   |
+          | Outreach_Log           |
+          +------------------------+
+```
+
+### Key Design Decisions
+
+| Decision | Rationale |
+|---|---|
+| **Groq + llama-3.3-70b** | Free API, low latency (~1-2s), strong structured JSON output |
+| **Streamlit** | Rapid prototyping; no separate frontend/backend needed at demo scale |
+| **Excel as data store** | Matches the supplied data format; no DB setup required |
+| **CSS via components.html + atob()** | Streamlit strips style tags in modern versions; iframe script injection is the only reliable bypass |
+| **Human-in-the-loop approval** | Outreach is never auto-sent; a human must review every message |
+| **In-memory deduplication** | URL + Name+Title composite key prevents duplicate profiles being scored or messaged |
+
+---
+
+## Assumptions Made
+
+1. **LinkedIn profile pool is a static snapshot** — in production this would be a live API; here it is the `LinkedIn_Profile_Pool` sheet.
+2. **"Send" is mocked** — the `LinkedInMockConnector` simulates an API call; no real messages are sent.
+3. **Groq API key is required** — LLM calls require a valid key; the app degrades gracefully if missing.
+4. **Score threshold of 30** — candidates scoring below 30/100 are excluded from the shortlist as clearly unqualified.
+5. **Open Roles sheet drives criteria** — `Hard_Skills`, `Experience_Min/Max`, `Territory`, `Preferred_Experience`, and `Core_Outcomes` columns are the single source of truth for role requirements.
+6. **Attendance data covers last 30 days** — the `Attendance_30D` sheet is assumed to be pre-filtered.
+7. **Outreach log is session-persistent** — persists within a Streamlit session but resets on server restart (no database).
+8. **One message per candidate per role** — the system warns if a Profile_ID + Role_ID outreach record already exists.
+
+---
+
+## Known Limitations
+
+| Limitation | Impact | Production Fix |
+|---|---|---|
+| No persistent database | Log resets on restart | SQLite / PostgreSQL backend |
+| Groq rate limits | Scoring 20+ candidates may hit free-tier limits | Retry backoff + paid tier |
+| LinkedIn connector is mocked | No real outreach sent | LinkedIn API / SMTP with OAuth |
+| CSS injection via iframe script | May break in Streamlit Cloud sandboxes | Custom Streamlit component |
+| Single-user session | No multi-user isolation | Add authentication layer |
+| Excel I/O not transactional | Concurrent writes risk corruption | Database backend |
+| LLM scores are non-deterministic | Same candidate may score differently | Cache results per (Profile_ID, Role_ID) |
+| No CI/CD pipeline | Manual deploy only | GitHub Actions |
+
+---
+
+## Test Evidence & Error Cases
+
+### Happy Path Verified
+- Data loads from all 8 Excel sheets without errors
+- Role selection populates hard/soft criteria cards correctly
+- AI sourcing returns ranked candidates with scores 0-100
+- Message generation produces role-contextual personalised text
+- Approve & Send records a `Sent` entry in the Audit Log
+
+### Duplicate Prevention Verified
+- Running sourcing twice shows the deduplication banner
+- Same Profile_ID + Role_ID combination triggers a duplicate outreach warning
+
+### Auth Failure Simulation Verified
+- Enabling "Simulate AUTH_401 Failure" toggle causes the send to log `Failed` with error code `AUTH_401`
+- Appears in the Audit Log with the Diagnostic Detail section highlighted in red
+
+### Role Switch State Clearing Verified
+- Changing the role dropdown clears stale sourcing results and pending outreach drafts automatically
+
+### Data Quality Exceptions Verified
+- Missing department assignments detected and flagged
+- Employees with zero attendance records generate an absentee alert
+- Pipeline stage mismatches flagged in the exceptions panel
+
+### Missing Data Resilience Verified
+- Missing optional Excel sheets handled gracefully with empty DataFrames — no application crash
+
+### Known Warning (Non-Critical)
+- Streamlit >= 1.41 shows: `use_container_width will be removed after 2025-12-31`
+- **Impact**: Warning only, no functional impact
+- **Fix**: Replace with `width='stretch'` — deferred, not in scope for this demo
+
+---
+
+## Time Spent
+
+| Phase | Hours |
+|---|---|
+| Requirement analysis & planning | ~1 h |
+| Data pipeline (data_loader.py, validation) | ~1.5 h |
+| LLM agent design & prompt engineering | ~2 h |
+| Mock connector & audit logging | ~0.5 h |
+| UI overhaul (all 4 pages + ui_styles.py) | ~3 h |
+| CSS injection debugging (Streamlit sanitiser) | ~1 h |
+| README & documentation | ~0.5 h |
+| **Total** | **~9.5 h** |
+
+---
+
+*Built by Naman for Jhandewalas Foods Limited AI Engineer Assessment.*
