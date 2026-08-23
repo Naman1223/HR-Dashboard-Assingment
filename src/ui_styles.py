@@ -600,28 +600,27 @@ def render_sidebar_toggle():
 def _inject_sidebar_visibility(hidden: bool):
     """
     Inject or remove CSS that collapses the sidebar.
-    Uses the same iframe-script injection method as inject_styles().
+    - hidden=True  → inject CSS to hide the sidebar completely.
+    - hidden=False → REMOVE the override style tag so Streamlit's
+                     own default CSS takes back control. Also clicks
+                     Streamlit's native expand button if the sidebar
+                     is in its built-in collapsed state.
     """
     if hidden:
-        css = """
-        section[data-testid="stSidebar"] {
-            display: none !important;
-        }
-        .stMainBlockContainer, .block-container {
-            max-width: 100% !important;
-            padding-left: 1rem !important;
-        }
-        """
-    else:
-        css = """
-        section[data-testid="stSidebar"] {
-            display: flex !important;
-        }
-        """
-
-    b64_css = base64.b64encode(css.encode("utf-8")).decode("utf-8")
-    components.html(
-        f"""<script>
+        b64_css = base64.b64encode(
+            b"""
+            section[data-testid="stSidebar"] {
+                display: none !important;
+                width: 0 !important;
+                min-width: 0 !important;
+            }
+            .stMainBlockContainer, .block-container {
+                max-width: 100% !important;
+                padding-left: 1rem !important;
+            }
+            """
+        ).decode("utf-8")
+        script = f"""<script>
             (function() {{
                 var existing = window.parent.document.getElementById('sidebar-toggle-styles');
                 if (existing) {{ existing.remove(); }}
@@ -630,6 +629,36 @@ def _inject_sidebar_visibility(hidden: bool):
                 style.textContent = atob("{b64_css}");
                 window.parent.document.head.appendChild(style);
             }})();
-        </script>""",
-        height=0,
-    )
+        </script>"""
+    else:
+        # Remove the hiding override — Streamlit's own CSS restores the sidebar.
+        # Also programmatically click the native expand button if sidebar is
+        # still in Streamlit's "collapsed" state.
+        script = """<script>
+            (function() {
+                // 1. Remove our custom hide-style so Streamlit CSS takes over
+                var existing = window.parent.document.getElementById('sidebar-toggle-styles');
+                if (existing) { existing.remove(); }
+
+                // 2. If Streamlit's own sidebar is collapsed, click its toggle
+                //    button to expand it (handles edge case where Streamlit's
+                //    own state got out of sync).
+                function tryExpand() {
+                    var doc = window.parent.document;
+                    // Streamlit's collapse button sits outside the sidebar
+                    var btn = doc.querySelector('[data-testid="collapsedControl"]');
+                    if (btn) { btn.click(); return; }
+                    // Fallback: force sidebar display via inline style
+                    var sb = doc.querySelector('[data-testid="stSidebar"]');
+                    if (sb) {
+                        sb.style.removeProperty('display');
+                        sb.style.removeProperty('width');
+                        sb.style.removeProperty('min-width');
+                    }
+                }
+                // Small delay lets Streamlit finish its own render before we touch the DOM
+                setTimeout(tryExpand, 80);
+            })();
+        </script>"""
+
+    components.html(script, height=0)
