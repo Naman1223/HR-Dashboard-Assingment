@@ -560,9 +560,15 @@ def soft_criteria_card(preferred: str, outcomes: str):
 
 def render_sidebar_toggle():
     """
-    Injects a minimal floating hamburger button into the parent document.
-    Operates entirely client-side via JavaScript — no st.rerun() needed.
-    State (hidden/shown) is persisted in localStorage so it survives reruns.
+    Two-button sidebar toggle — avoids any z-index conflict with nav links:
+
+      1. A "‹" collapse button injected INSIDE the sidebar near the top.
+         Lives in the sidebar DOM so it never floats over page navigation.
+
+      2. A small "☰" FAB at the bottom-left corner of the screen.
+         Only VISIBLE when the sidebar is hidden, so it never overlaps anything.
+
+    Both operate entirely client-side. State persists via localStorage.
     Call once per page, after inject_styles().
     """
     components.html(
@@ -571,89 +577,136 @@ def render_sidebar_toggle():
         (function () {
             var doc = window.parent.document;
 
-            /* ── Only inject once per Streamlit session ── */
-            if (doc.getElementById('hr-sidebar-fab')) { return; }
+            /* Run once per page load (not once per Streamlit session,
+               because navigation replaces the DOM) */
+            if (doc.getElementById('hr-sidebar-show-fab')) {
+                _hrSyncFabVisibility();
+                return;
+            }
 
-            /* ── Read persisted state ── */
+            /* ── Persisted state ── */
             var hidden = localStorage.getItem('hr-sidebar-hidden') === 'true';
 
-            /* ── Helper: apply sidebar visibility ── */
+            /* ── FAB style helper ── */
+            function styleBtn(el, extra) {
+                Object.assign(el.style, Object.assign({
+                    border:         '1px solid rgba(255,255,255,0.12)',
+                    background:     'rgba(10,22,40,0.82)',
+                    color:          'rgba(200,220,255,0.75)',
+                    cursor:         'pointer',
+                    backdropFilter: 'blur(10px)',
+                    transition:     'background 0.18s, color 0.18s, border-color 0.18s',
+                    boxShadow:      '0 2px 8px rgba(0,0,0,0.40)',
+                    lineHeight:     '1',
+                    padding:        '0',
+                }, extra || {}));
+                el.addEventListener('mouseenter', function () {
+                    el.style.background  = 'rgba(30,144,255,0.28)';
+                    el.style.borderColor = 'rgba(30,144,255,0.55)';
+                    el.style.color       = '#fff';
+                });
+                el.addEventListener('mouseleave', function () {
+                    el.style.background  = 'rgba(10,22,40,0.82)';
+                    el.style.borderColor = 'rgba(255,255,255,0.12)';
+                    el.style.color       = 'rgba(200,220,255,0.75)';
+                });
+            }
+
+            /* ── Apply sidebar CSS ── */
             function applySidebarState(hide) {
                 var sb = doc.querySelector('[data-testid="stSidebar"]');
                 if (!sb) return;
-
                 if (hide) {
-                    sb.style.setProperty('display',   'none', 'important');
-                    sb.style.setProperty('width',      '0',    'important');
-                    sb.style.setProperty('min-width',  '0',    'important');
+                    sb.style.setProperty('display',  'none', 'important');
+                    sb.style.setProperty('width',    '0',    'important');
+                    sb.style.setProperty('minWidth', '0',    'important');
                 } else {
                     sb.style.removeProperty('display');
                     sb.style.removeProperty('width');
-                    sb.style.removeProperty('min-width');
-                    /* click Streamlit's own expand control if sidebar was
-                       also collapsed natively */
-                    var expandBtn = doc.querySelector('[data-testid="collapsedControl"]');
-                    if (expandBtn) { setTimeout(function(){ expandBtn.click(); }, 60); }
+                    sb.style.removeProperty('minWidth');
+                    /* nudge Streamlit's own expand control if needed */
+                    var exp = doc.querySelector('[data-testid="collapsedControl"]');
+                    if (exp) setTimeout(function(){ exp.click(); }, 60);
                 }
             }
 
-            /* ── Create the button ── */
-            var btn = doc.createElement('button');
-            btn.id = 'hr-sidebar-fab';
-            btn.title = hidden ? 'Show sidebar' : 'Hide sidebar';
-            btn.innerHTML = '&#9776;'; /* ☰ hamburger */
-
-            Object.assign(btn.style, {
+            /* ── 1. "Show" FAB — bottom-left, only visible when hidden ──
+                   Positioned at bottom-left to avoid nav links entirely.   */
+            var showFab = doc.createElement('button');
+            showFab.id    = 'hr-sidebar-show-fab';
+            showFab.title = 'Show sidebar';
+            showFab.innerHTML = '&#9776;'; /* ☰ */
+            styleBtn(showFab, {
                 position:       'fixed',
-                top:            '10px',
-                left:           '10px',
-                zIndex:         '999999',
-                width:          '28px',
-                height:         '28px',
-                borderRadius:   '6px',
-                border:         '1px solid rgba(255,255,255,0.12)',
-                background:     'rgba(10,22,40,0.80)',
-                color:          'rgba(200,220,255,0.70)',
-                fontSize:       '14px',
-                lineHeight:     '1',
-                cursor:         'pointer',
-                display:        'flex',
+                bottom:         '18px',
+                left:           '14px',
+                zIndex:         '99999',
+                width:          '30px',
+                height:         '30px',
+                borderRadius:   '7px',
+                fontSize:       '15px',
+                display:        hidden ? 'flex' : 'none',
                 alignItems:     'center',
                 justifyContent: 'center',
-                padding:        '0',
-                backdropFilter: 'blur(10px)',
-                transition:     'background 0.18s, color 0.18s, border-color 0.18s',
-                boxShadow:      '0 2px 6px rgba(0,0,0,0.35)',
             });
-
-            /* ── Hover effects ── */
-            btn.addEventListener('mouseenter', function () {
-                btn.style.background   = 'rgba(30,144,255,0.25)';
-                btn.style.borderColor  = 'rgba(30,144,255,0.50)';
-                btn.style.color        = '#fff';
+            showFab.addEventListener('click', function () {
+                hidden = false;
+                localStorage.setItem('hr-sidebar-hidden', 'false');
+                showFab.style.display = 'none';
+                applySidebarState(false);
             });
-            btn.addEventListener('mouseleave', function () {
-                btn.style.background   = 'rgba(10,22,40,0.80)';
-                btn.style.borderColor  = 'rgba(255,255,255,0.12)';
-                btn.style.color        = 'rgba(200,220,255,0.70)';
-            });
+            doc.body.appendChild(showFab);
 
-            /* ── Click handler ── */
-            btn.addEventListener('click', function () {
-                hidden = !hidden;
-                localStorage.setItem('hr-sidebar-hidden', hidden);
-                btn.title = hidden ? 'Show sidebar' : 'Hide sidebar';
-                applySidebarState(hidden);
-            });
+            /* ── 2. "Hide" button — injected inside sidebar, near the top ──
+                   Part of the sidebar flow so it CANNOT cover nav links.    */
+            function injectHideButton() {
+                var sb = doc.querySelector('[data-testid="stSidebar"]');
+                if (!sb || doc.getElementById('hr-sidebar-hide-btn')) return;
 
-            /* ── Mount ── */
-            doc.body.appendChild(btn);
+                var hideBtn = doc.createElement('button');
+                hideBtn.id        = 'hr-sidebar-hide-btn';
+                hideBtn.title     = 'Hide sidebar';
+                hideBtn.innerHTML = '&#8249; Hide'; /* ‹ Hide */
+                styleBtn(hideBtn, {
+                    position:       'absolute',
+                    top:            '8px',
+                    right:          '8px',
+                    zIndex:         '9999',
+                    height:         '24px',
+                    padding:        '0 8px',
+                    borderRadius:   '5px',
+                    fontSize:       '11px',
+                    fontWeight:     '500',
+                    letterSpacing:  '0.03em',
+                    display:        'flex',
+                    alignItems:     'center',
+                    gap:            '2px',
+                });
+                hideBtn.addEventListener('click', function () {
+                    hidden = true;
+                    localStorage.setItem('hr-sidebar-hidden', 'true');
+                    showFab.style.display = 'flex';
+                    applySidebarState(true);
+                });
 
-            /* ── Apply stored state immediately after Streamlit renders ── */
-            if (hidden) {
-                /* Streamlit may not have rendered the sidebar yet — wait briefly */
-                setTimeout(function(){ applySidebarState(true); }, 120);
+                /* sidebar needs position:relative for absolute child */
+                if (getComputedStyle(sb).position === 'static') {
+                    sb.style.position = 'relative';
+                }
+                sb.appendChild(hideBtn);
             }
+
+            /* ── Sync FAB visibility on page transitions ── */
+            window._hrSyncFabVisibility = function() {
+                showFab.style.display = hidden ? 'flex' : 'none';
+            };
+
+            /* ── Boot ── */
+            setTimeout(injectHideButton, 180);
+            if (hidden) {
+                setTimeout(function(){ applySidebarState(true); }, 130);
+            }
+
         })();
         </script>
         """,
