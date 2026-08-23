@@ -10,7 +10,7 @@ from src.connectors import LinkedInMockConnector
 from src.ui_styles import (
     inject_styles, page_hero, section_header, badge,
     score_badge, score_bar_html, step_indicator,
-    hard_criteria_card, soft_criteria_card
+    hard_criteria_card, soft_criteria_card, render_sidebar_toggle
 )
 
 logger = logging.getLogger("HRSystem.AgenticSourcing")
@@ -22,6 +22,7 @@ st.set_page_config(
 )
 
 inject_styles()
+render_sidebar_toggle()
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:

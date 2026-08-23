@@ -2,7 +2,7 @@ import logging
 import streamlit as st
 import pandas as pd
 from src.data_loader import load_data, render_refresh_button
-from src.ui_styles import inject_styles, page_hero, section_header
+from src.ui_styles import inject_styles, page_hero, section_header, render_sidebar_toggle
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,6 +17,7 @@ st.set_page_config(
 )
 
 inject_styles()
+render_sidebar_toggle()
 
 # ── Hero ──────────────────────────────────────────────────────────────────────
 page_hero(

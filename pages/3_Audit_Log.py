@@ -2,7 +2,7 @@ import logging
 import streamlit as st
 import pandas as pd
 from src.data_loader import render_refresh_button
-from src.ui_styles import inject_styles, page_hero, section_header, badge
+from src.ui_styles import inject_styles, page_hero, section_header, badge, render_sidebar_toggle
 
 logger = logging.getLogger("HRSystem.AuditLog")
 
@@ -13,6 +13,7 @@ st.set_page_config(
 )
 
 inject_styles()
+render_sidebar_toggle()
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:

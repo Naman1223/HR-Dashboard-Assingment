@@ -4,7 +4,7 @@ import pandas as pd
 from src.data_loader import render_refresh_button
 from src.ui_styles import (
     inject_styles, page_hero, section_header,
-    badge, exception_item
+    badge, exception_item, render_sidebar_toggle
 )
 
 logger = logging.getLogger("HRSystem.Dashboard")
@@ -16,6 +16,7 @@ st.set_page_config(
 )
 
 inject_styles()
+render_sidebar_toggle()
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:

@@ -554,3 +554,82 @@ def soft_criteria_card(preferred: str, outcomes: str):
         </div>""",
         unsafe_allow_html=True,
     )
+
+
+# ── Sidebar toggle ─────────────────────────────────────────────────────────────
+
+def render_sidebar_toggle():
+    """
+    Renders a floating button (top-left) that hides/shows the Streamlit sidebar.
+    Call this once per page, after inject_styles().
+    Uses CSS injected into the parent document to collapse the sidebar panel,
+    controlled by a session-state boolean `sidebar_hidden`.
+    """
+    if "sidebar_hidden" not in st.session_state:
+        st.session_state.sidebar_hidden = False
+
+    # Inject the hide/show CSS rule every render (state may have changed)
+    _inject_sidebar_visibility(st.session_state.sidebar_hidden)
+
+    # Floating toggle button
+    icon = "▶" if st.session_state.sidebar_hidden else "◀"
+    label = "Show Sidebar" if st.session_state.sidebar_hidden else "Hide Sidebar"
+
+    st.markdown(
+        f"""
+        <style>
+        .sidebar-fab-wrapper {{
+            position: fixed;
+            top: 14px;
+            left: 14px;
+            z-index: 99999;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Streamlit button rendered normally — we rely on Streamlit's own rerun cycle
+    col_fab, _ = st.columns([0.08, 0.92])
+    with col_fab:
+        if st.button(icon, key="__sidebar_toggle_btn__", help=label, use_container_width=True):
+            st.session_state.sidebar_hidden = not st.session_state.sidebar_hidden
+            st.rerun()
+
+
+def _inject_sidebar_visibility(hidden: bool):
+    """
+    Inject or remove CSS that collapses the sidebar.
+    Uses the same iframe-script injection method as inject_styles().
+    """
+    if hidden:
+        css = """
+        section[data-testid="stSidebar"] {
+            display: none !important;
+        }
+        .stMainBlockContainer, .block-container {
+            max-width: 100% !important;
+            padding-left: 1rem !important;
+        }
+        """
+    else:
+        css = """
+        section[data-testid="stSidebar"] {
+            display: flex !important;
+        }
+        """
+
+    b64_css = base64.b64encode(css.encode("utf-8")).decode("utf-8")
+    components.html(
+        f"""<script>
+            (function() {{
+                var existing = window.parent.document.getElementById('sidebar-toggle-styles');
+                if (existing) {{ existing.remove(); }}
+                var style = window.parent.document.createElement('style');
+                style.id = 'sidebar-toggle-styles';
+                style.textContent = atob("{b64_css}");
+                window.parent.document.head.appendChild(style);
+            }})();
+        </script>""",
+        height=0,
+    )
