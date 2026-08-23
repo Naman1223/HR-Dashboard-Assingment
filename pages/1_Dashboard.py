@@ -1,6 +1,7 @@
 import logging
 import streamlit as st
 import pandas as pd
+from src.data_loader import render_refresh_button
 
 logger = logging.getLogger("HRSystem.Dashboard")
 
@@ -9,6 +10,8 @@ st.set_page_config(
     page_icon="📊",
     layout="wide"
 )
+
+render_refresh_button(sidebar=True)
 
 st.title("📊 HR Management Dashboard")
 st.caption("Live workforce analytics and exception tracking.")

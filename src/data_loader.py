@@ -254,3 +254,55 @@ def get_clean_candidates(candidates_df):
     except Exception as err:
         logger.error(f"Candidate deduplication failed: {err}")
         return candidates_df
+
+
+def reload_data(preserve_outreach=True):
+    """
+    Clears Streamlit data cache and re-reads the Excel file from disk.
+    Updates st.session_state with fresh data.
+    """
+    try:
+        load_data.clear()
+        fresh_data = load_data()
+        if fresh_data:
+            st.session_state.data = fresh_data
+            
+            # Reset stale sourcing evaluations so new candidates/roles get evaluated cleanly
+            if "sourcing_results" in st.session_state:
+                del st.session_state["sourcing_results"]
+            if "sourcing_role_label" in st.session_state:
+                del st.session_state["sourcing_role_label"]
+                
+            # Manage outreach log
+            if not preserve_outreach or "outreach_log" not in st.session_state or st.session_state.outreach_log.empty:
+                if "Outreach_Log" in fresh_data and not fresh_data["Outreach_Log"].empty:
+                    st.session_state.outreach_log = fresh_data["Outreach_Log"].copy()
+                else:
+                    st.session_state.outreach_log = pd.DataFrame()
+            
+            logger.info("Data successfully refreshed from Excel file.")
+            return fresh_data
+    except Exception as err:
+        logger.exception(f"Failed to reload data: {err}")
+    return None
+
+
+def render_refresh_button(sidebar=True):
+    """
+    Renders a convenient 'Refresh Data from Excel' button with feedback and automatic rerun.
+    """
+    target = st.sidebar if sidebar else st
+    with target:
+        if sidebar:
+            st.markdown("---")
+            st.markdown("### 🔄 Data Sync")
+        if st.button("🔄 Refresh Data from Excel", use_container_width=True, help="Re-read Excel workbook from disk to pick up any changes, new roles, or edits."):
+            with st.spinner("Reloading data from Excel..."):
+                res = reload_data()
+                if res:
+                    st.toast("✅ Data refreshed successfully from Excel!", icon="🔄")
+                    st.success("Data reloaded!")
+                    st.rerun()
+                else:
+                    st.error("Failed to reload data from Excel.")
+

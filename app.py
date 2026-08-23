@@ -1,7 +1,7 @@
 import logging
 import streamlit as st
 import pandas as pd
-from src.data_loader import load_data
+from src.data_loader import load_data, render_refresh_button
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,3 +48,7 @@ if "data" not in st.session_state:
             st.error(f"Error loading system data: {err}")
 else:
     st.success("System ready. Select a module from the sidebar.")
+
+# Render refresh button in the sidebar
+render_refresh_button(sidebar=True)
+

@@ -5,7 +5,8 @@ import pandas as pd
 import streamlit as st
 
 from src.llm_agent import evaluate_candidate, generate_outreach_message
-from src.data_loader import save_outreach_log, get_clean_candidates
+from src.data_loader import save_outreach_log, get_clean_candidates, render_refresh_button
+from src.connectors import LinkedInMockConnector
 
 logger = logging.getLogger("HRSystem.AgenticSourcing")
 
@@ -80,6 +81,8 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Demo Controls**")
     force_fail = st.checkbox("Simulate AUTH_401 Send Failure")
+
+render_refresh_button(sidebar=True)
 
 if st.button("🔍 Run AI Sourcing", type="primary"):
     with st.spinner("Processing candidate pool..."):
@@ -183,56 +186,32 @@ if "sourcing_results" in st.session_state:
             if st.button("✅ Approve & Send", type="primary"):
                 try:
                     log_df = st.session_state.get("outreach_log", pd.DataFrame())
-                    already_sent = pd.DataFrame()
+                    same_role_sent = pd.DataFrame()
+                    other_role_sent = pd.DataFrame()
                     if not log_df.empty and "Profile_ID" in log_df.columns:
-                        already_sent = log_df[
+                        past_sends = log_df[
                             (log_df["Profile_ID"] == profile_id) &
-                            (log_df["Role_ID"] == selected_role["Role_ID"]) &
                             (log_df["Send_Status"] == "Sent")
                         ]
+                        if not past_sends.empty:
+                            same_role_sent = past_sends[past_sends["Role_ID"] == selected_role["Role_ID"]]
+                            other_role_sent = past_sends[past_sends["Role_ID"] != selected_role["Role_ID"]]
 
-                    if not already_sent.empty:
+                    if not same_role_sent.empty:
                         st.error("Duplicate send blocked: candidate previously contacted for this role.")
                     else:
-                        ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        outreach_id = str(uuid.uuid4())[:8].upper()
-
-                        if force_fail:
-                            entry = {
-                                "Outreach_ID": outreach_id,
-                                "Profile_ID": profile_id,
-                                "Role_ID": selected_role["Role_ID"],
-                                "Created_At": ts,
-                                "Channel": "LinkedIn",
-                                "Message_Type": "Initial Outreach",
-                                "Message_Text": edited_msg,
-                                "Approval_Status": "Approved",
-                                "Send_Status": "Failed",
-                                "Sent_At": None,
-                                "Response_Status": "N/A",
-                                "Error_Code": "AUTH_401",
-                                "Error_Detail": "Mock connector token expired"
-                            }
-                            st.error("Send failed (AUTH_401). Record logged as Failed.")
-                            logger.warning(f"Simulated send failure for Outreach_ID: {outreach_id}")
+                        if not other_role_sent.empty:
+                            st.warning("Warning: Candidate was previously contacted for a different role.")
+                            
+                        connector = LinkedInMockConnector(force_fail=force_fail)
+                        entry = connector.send_message(profile_id, selected_role["Role_ID"], edited_msg)
+                        
+                        if entry["Send_Status"] == "Failed":
+                            st.error(f"Send failed ({entry['Error_Code']}). Record logged as Failed.")
+                            logger.warning(f"Simulated send failure for Outreach_ID: {entry['Outreach_ID']}")
                         else:
-                            entry = {
-                                "Outreach_ID": outreach_id,
-                                "Profile_ID": profile_id,
-                                "Role_ID": selected_role["Role_ID"],
-                                "Created_At": ts,
-                                "Channel": "LinkedIn",
-                                "Message_Type": "Initial Outreach",
-                                "Message_Text": edited_msg,
-                                "Approval_Status": "Approved",
-                                "Send_Status": "Sent",
-                                "Sent_At": ts,
-                                "Response_Status": "Pending",
-                                "Error_Code": None,
-                                "Error_Detail": None
-                            }
-                            st.success(f"Message sent successfully (Mock ID: {outreach_id}).")
-                            logger.info(f"Outreach message sent: {outreach_id}")
+                            st.success(f"Message sent successfully (Mock ID: {entry['Outreach_ID']}).")
+                            logger.info(f"Outreach message sent: {entry['Outreach_ID']}")
 
                         st.session_state.outreach_log = save_outreach_log(st.session_state.outreach_log, entry)
                 except Exception as err:
